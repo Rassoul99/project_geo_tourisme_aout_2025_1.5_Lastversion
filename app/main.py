@@ -11,6 +11,9 @@ from utils.recommendations import generate_recommendations
 from utils.weather import get_weather_forecast
 from dotenv import load_dotenv
 from fpdf import FPDF
+import json
+import base64
+from pathlib import Path
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -18,12 +21,9 @@ GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
 VIATOR_API_KEY = os.getenv("VIATOR_API_KEY")
 OPENWEATHERMAP_KEY = os.getenv("OPENWEATHERMAP_KEY")
 
-import streamlit as st
-import json
-import os
-
 # --- Fichier pour sauvegarder les préférences ---
 PREF_FILE = "user_preferences.json"
+FAVORITES_FILE = "favorite_itineraries.json"
 
 def load_preferences():
     if os.path.exists(PREF_FILE):
@@ -34,6 +34,16 @@ def load_preferences():
 def save_preferences(prefs):
     with open(PREF_FILE, "w") as f:
         json.dump(prefs, f)
+
+def load_favorites():
+    if os.path.exists(FAVORITES_FILE):
+        with open(FAVORITES_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_favorites(favorites):
+    with open(FAVORITES_FILE, "w") as f:
+        json.dump(favorites, f)
 
 # --- Politique de confidentialité ---
 def show_privacy_policy():
@@ -123,6 +133,69 @@ def privacy_settings_page():
     with st.expander("📜 Voir la politique de confidentialité complète"):
         show_privacy_policy()
 
+def about_page():
+    st.title("ℹ️ À propos")
+    st.markdown("""
+    **Bienvenue sur Smart Travel Planner, votre assistant de voyage intelligent.**
+    Notre application vous aide à planifier votre voyage en vous proposant des itinéraires optimisés, des recommandations personnalisées et des conseils basés sur la météo.
+    """)
+    st.markdown("🌍 **Notre mission :** Rendre la planification de voyage simple et accessible à tous.")
+    st.markdown("📧 **Contact :** [geotourisme25@gmail.com](mailto:geotourisme25@gmail.com)")
+
+def how_it_works_page():
+    st.title("❓ Comment ça marche")
+    st.markdown("""
+    **1. Choisissez votre destination :**
+    - Entrez la ville et le pays où vous souhaitez vous rendre.
+    """)
+    st.markdown("""
+    **2. Définissez vos préférences :**
+    - Sélectionnez les types de lieux que vous souhaitez visiter.
+    - Ajoutez votre âge pour des recommandations personnalisées (ex: musées gratuits pour les moins de 26 ans).
+    - Choisissez le rayon de recherche et vos préférences horaires.
+    """)
+    st.markdown("""
+    **3. Lancez la recherche :**
+    - Cliquez sur le bouton 'Rechercher' pour obtenir des recommandations personnalisées.
+    """)
+    st.markdown("""
+    **4. Explorez les résultats :**
+    - Consultez les itinéraires optimisés et les recommandations pour chaque jour de votre séjour.
+    """)
+    st.markdown("""
+    **5. Téléchargez votre itinéraire :**
+    - Vous pouvez télécharger votre itinéraire au format PDF pour un accès hors ligne.
+    """)
+
+def favorites_page():
+    st.title("⭐ Itinéraires Favoris")
+    favorites = load_favorites()
+    if not favorites:
+        st.info("Aucun itinéraire enregistré en favoris.")
+    else:
+        for i, fav in enumerate(favorites):
+            with st.expander(f"📅 {fav['title']}"):
+                st.markdown(f"**Destination :** {fav['destination']}")
+                st.markdown(f"**Date :** {fav['date']}")
+                if st.button(f"Supprimer", key=f"delete_{i}"):
+                    favorites.pop(i)
+                    save_favorites(favorites)
+                    st.rerun()
+    st.markdown("---")
+    st.subheader("Ajouter aux favoris")
+    if 'recommendations' in st.session_state and 'current_weather' in st.session_state:
+        if st.button("Ajouter l'itinéraire actuel aux favoris"):
+            new_fav = {
+                "title": f"Itinéraire pour {st.session_state.get('city', 'Ma Destination')} - {datetime.today().strftime('%Y-%m-%d')}",
+                "destination": st.session_state.get('city', 'Ma Destination'),
+                "date": datetime.today().strftime("%Y-%m-%d"),
+                "recommendations": st.session_state['recommendations'],
+                "weather": st.session_state['current_weather']
+            }
+            favorites.append(new_fav)
+            save_favorites(favorites)
+            st.success("Itinéraire ajouté aux favoris !")
+
 # ---------- Utilitaires locaux ----------
 def _normalize_type_for_display(google_types):
     if not google_types:
@@ -194,350 +267,380 @@ if show_gdpr_popup():
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
     # Sidebar navigation
     st.sidebar.title("Menu")
-    page = st.sidebar.radio("Navigation", ["🏠 Accueil", "⚙️ Confidentialité"])
-    if page == "🏠 Accueil":
-        # Titre et description
-        st.title("🌍 Smart Travel Planner")
-        st.markdown("""
-        Planifiez votre voyage idéal avec des recommandations personnalisées basées sur les avis et les horaires d'ouverture.
-        """)
-        st.markdown("**💡 Conseils:**")
-        st.markdown("- Utilisez les filtres pour affiner vos résultats et n’hésitez pas à élargir le rayon de recherche si nécessaire, afin d’obtenir plus de propositions d’activités.")
-        st.markdown("- Les itinéraires sont optimisés en fonction de la météo et de vos préférences")
-    elif page == "⚙️ Confidentialité":
-        privacy_settings_page()
-        st.markdown("---")
+    page = st.sidebar.radio("Navigation", ["🏠 Accueil", "⚙️ Confidentialité", "ℹ️ À propos", "❓ Comment ça marche", "⭐ Favoris"])
 
+    # CSS pour améliorer l'interface
     st.markdown("""
     <style>
         .stButton > button {
-            background-color: green;
+            background-color: #4CAF50;
             color: white;
+        }
+        .stSelectbox, .stTextInput, .stSlider, .stNumberInput {
+            margin-bottom: 1rem;
+        }
+        .icon {
+            font-size: 1.5em;
+            margin-right: 0.5em;
         }
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- Détection de position par défaut ----------
-    if 'start_location' not in st.session_state:
-        try:
-            response = requests.get('https://ipinfo.io/json', timeout=5)
-            data = response.json()
-            if 'loc' in data:
-                lat, lng = data['loc'].split(',')
-                st.session_state['start_location'] = (float(lat), float(lng))
-            if os.getenv("GOOGLE_PLACES_KEY"):
+    if page == "🏠 Accueil":
+        st.title("🌍 Smart Travel Planner")
+        st.markdown("Planifiez votre voyage idéal avec des recommandations personnalisées basées sur vos préférences.")
+
+        # Détection de position par défaut
+        if 'start_location' not in st.session_state:
+            try:
+                response = requests.get('https://ipinfo.io/json', timeout=5)
+                data = response.json()
+                if 'loc' in data:
+                    lat, lng = data['loc'].split(',')
+                    st.session_state['start_location'] = (float(lat), float(lng))
+                if os.getenv("GOOGLE_PLACES_KEY"):
+                    g_loc = google_geolocate()
+                    if g_loc:
+                        st.session_state['start_location'] = (g_loc['lat'], g_loc['lng'])
+                if 'start_location' in st.session_state:
+                    lat, lng = st.session_state['start_location']
+                    weather = get_weather_forecast(lat, lng)
+                    if weather:
+                        st.session_state['current_weather'] = {datetime.today().strftime("%Y-%m-%d"): weather}
+                    st.success(f"📍 Position détectée automatiquement: {lat:.5f}, {lng:.5f}")
+                else:
+                    st.error("Impossible de détecter votre position par défaut.")
+            except Exception as e:
+                st.error(f"Erreur de détection automatique: {e}")
+
+        with st.sidebar:
+            st.header("⚙️ Filtres")
+            country = st.text_input("🌎 Pays", "France")
+            city = st.text_input("🏙️ Ville", "Paris")
+            start_date = st.date_input("📅 Date de début", datetime.today())
+            stay_duration = st.number_input("📅 Durée du séjour (jours)", min_value=1, value=3, key="stay_duration")
+            age = st.number_input("👤 Âge", min_value=0, max_value=120, value=25, key="age")
+
+            # Personnalisation
+            st.subheader("🍽️ Types de cuisine préférés")
+            cuisine_types = st.multiselect(
+                "Sélectionnez vos cuisines préférées",
+                ["Française", "Italienne", "Chinoise", "Japonaise", "Indienne", "Mexicaine", "Autre"],
+                default=["Française", "Italienne"]
+            )
+
+            st.subheader("🎭 Activités préférées")
+            activity_types = st.multiselect(
+                "Sélectionnez vos activités préférées",
+                ["Musées", "Parcs", "Shopping", "Randonnée", "Sports", "Culture"],
+                default=["Musées", "Culture"]
+            )
+
+            poi_types = st.multiselect(
+                "📍 Types de lieux",
+                ["restaurant", "hotel", "tourist_attraction"],
+                default=["restaurant", "hotel", "tourist_attraction"]
+            )
+
+            radius = st.slider("📏 Rayon de recherche (mètres)", 100, 5000, 2000, key="radius")
+            time_preferences = st.multiselect(
+                "⏰ Préférences horaires",
+                ["Matin (8h-12h)", "Midi (12h-14h)", "Soir (18h-22h)"],
+                default=["Midi (12h-14h)", "Soir (18h-22h)"]
+            )
+            min_rating = st.slider("⭐ Note minimale", 1.0, 5.0, 4.0, 0.1)
+            detect_location = st.button("📍 Détecter ma position")
+
+        # Détection de la position à la demande
+        if detect_location:
+            try:
+                lat_lng = None
+                response = requests.get('https://ipinfo.io/json', timeout=5)
+                data = response.json()
+                if 'loc' in data:
+                    lat, lng = data['loc'].split(',')
+                    lat_lng = (float(lat), float(lng))
                 g_loc = google_geolocate()
                 if g_loc:
-                    st.session_state['start_location'] = (g_loc['lat'], g_loc['lng'])
-            if 'start_location' in st.session_state:
-                lat, lng = st.session_state['start_location']
-                weather = get_weather_forecast(lat, lng)
-                if weather:
-                    st.session_state['current_weather'] = {datetime.today().strftime("%Y-%m-%d"): weather}
-                st.success(f"Position détectée automatiquement: {lat:.5f}, {lng:.5f}")
-            else:
-                st.error("Impossible de détecter votre position par défaut.")
-        except Exception as e:
-            st.error(f"Erreur de détection automatique: {e}")
-
-    # Sidebar pour les filtres
-    with st.sidebar:
-        st.header("⚙️ Filtres")
-        country = st.text_input("Pays", "France")
-        city = st.text_input("Ville", "Paris")
-        start_date = st.date_input("Date de début", datetime.today())
-        stay_duration = st.number_input("Durée du séjour (jours)", min_value=1, value=3)
-        end_date = start_date + timedelta(days=stay_duration)
-        st.write(f"Date de fin: {end_date.strftime('%Y-%m-%d')}")
-        poi_types = st.multiselect(
-            "Types de lieux",
-            ["restaurant", "hotel", "tourist_attraction"],
-            default=["restaurant", "hotel", "tourist_attraction"]
-        )
-        radius = st.slider("Rayon de recherche (mètres)", 100, 5000, 300)
-        time_preferences = st.multiselect(
-            "Préférences horaires",
-            ["Matin (8h-12h)", "Midi (12h-14h)", "Soir (18h-22h)"],
-            default=["Matin (8h-12h)", "Midi (12h-14h)", "Soir (18h-22h)"]
-        )
-        min_rating = st.slider("Note minimale", 1.0, 5.0, 4.0, 0.1)
-        detect_location = st.button("📍 Détecter ma position")
-
-    # Détection de la position à la demande
-    if detect_location:
-        try:
-            lat_lng = None
-            response = requests.get('https://ipinfo.io/json', timeout=5)
-            data = response.json()
-            if 'loc' in data:
-                lat, lng = data['loc'].split(',')
-                lat_lng = (float(lat), float(lng))
-            g_loc = google_geolocate()
-            if g_loc:
-                lat_lng = (g_loc['lat'], g_loc['lng'])
-            if lat_lng:
-                st.session_state['start_location'] = lat_lng
-                st.success(f"Position détectée: {lat_lng[0]:.5f}, {lat_lng[1]:.5f}")
-                weather = get_weather_forecast(lat_lng[0], lat_lng[1])
-                if weather:
-                    st.session_state['current_weather'] = {datetime.today().strftime("%Y-%m-%d"): weather}
-            else:
-                st.error("Impossible de détecter votre position.")
-        except Exception as e:
-            st.error(f"Erreur de détection: {e}")
-
-    # Fonction pour générer un PDF
-    def generate_pdf(recommendations, weather_forecasts, start_date, stay_duration):
-        pdf = FPDF()
-        try:
-            pdf.add_font('DejaVu', '', 'DejaVuSansCondensed.ttf', uni=True)
-            pdf.set_font('DejaVu', '', 12)
-        except:
-            pdf.set_font("Arial", size=12)
-        pdf.add_page()
-
-        for day_num in range(1, stay_duration + 1):
-            day_key = f"Day {day_num}"
-            day_date = (start_date + timedelta(days=day_num - 1)).strftime("%Y-%m-%d")
-            day_pois = recommendations.get(day_key, [])
-            weather_info = weather_forecasts.get(day_date, {})
-            weather_description = weather_info.get('description', 'Non disponible')
-            temp = weather_info.get('temp', '-')
-
-            clean_day_text = f"Jour {day_num} ({day_date}): Météo prévue - Température: {temp}°C, Conditions: {weather_description}".encode('latin1', 'ignore').decode('latin1')
-            pdf.cell(200, 10, txt=clean_day_text, ln=True, align='C')
-
-            pdf.cell(200, 10, txt="Hôtel:", ln=True)
-            hotels = [poi for poi in day_pois if poi.get('type') == 'hotel']
-            for hotel in hotels:
-                clean_text = f"Nom: {hotel['name']}, Note: {hotel.get('rating','N/A')}⭐".encode('latin1', 'ignore').decode('latin1')
-                pdf.cell(200, 10, txt=clean_text, ln=True)
-
-            pdf.cell(200, 10, txt="Activités:", ln=True)
-            for poi in day_pois:
-                if poi.get('type') != 'hotel':
-                    activity_text = f"Activité: {poi['name']} ({poi.get('type', '')})"
-                    clean_activity_text = activity_text.encode('latin1', 'ignore').decode('latin1')
-                    pdf.cell(200, 10, txt=clean_activity_text, ln=True)
-                    if 'time_slot' in poi:
-                        clean_time_slot = str(poi['time_slot']).encode('latin1', 'ignore').decode('latin1')
-                        pdf.cell(200, 10, txt=f"Créneau: {clean_time_slot}", ln=True)
-
-        byte_array_output = pdf.output(dest='S')
-        if isinstance(byte_array_output, bytearray):
-            byte_array_output = bytes(byte_array_output)
-        return byte_array_output
-
-    # Recherche
-    if st.button("Rechercher"):
-        with st.spinner("Recherche des meilleurs lieux..."):
-            try:
-                location = get_geocode_address(f"{city}, {country}")
-                if not location:
-                    st.error(f"Impossible de trouver {city}. Essayez une autre ville.")
-                    st.stop()
-                lat, lng = location['lat'], location['lng']
-                st.session_state['start_location'] = (lat, lng)
-                st.write(f"Coordonnées pour {city}: {lat}, {lng}")
-
-                # Récupérer la météo pour chaque jour du séjour
-                weather_forecasts = fetch_weather_forecast(lat, lng, stay_duration)
-                if weather_forecasts:
-                    st.session_state['current_weather'] = weather_forecasts
-
-                all_pois = []
-                for poi_type in poi_types:
-                    g_type = 'lodging' if poi_type == 'hotel' else poi_type
-                    pois = get_nearby_places((lat, lng), radius, g_type)
-                    for poi in pois:
-                        details = get_place_details(poi.get('place_id'))
-                        place = {
-                            'name': poi.get('name') or details.get('name'),
-                            'place_id': poi.get('place_id'),
-                            'google_types': details.get('types') or poi.get('types', []),
-                            'address': details.get('vicinity') or details.get('formatted_address') or poi.get('vicinity'),
-                            'latitude': details.get('geometry', {}).get('location', {}).get('lat') or poi.get('geometry', {}).get('location', {}).get('lat'),
-                            'longitude': details.get('geometry', {}).get('location', {}).get('lng') or poi.get('geometry', {}).get('location', {}).get('lng'),
-                            'rating': details.get('rating', poi.get('rating', 0)),
-                            'user_ratings_total': details.get('user_ratings_total', poi.get('user_ratings_total', 0)),
-                            'price_level': details.get('price_level', poi.get('price_level', 0)),
-                            'reviews': details.get('reviews', []),
-                            'website': details.get('website'),
-                            'formatted_phone_number': details.get('formatted_phone_number', details.get('international_phone_number')),
-                            'opening_hours_raw': details.get('opening_hours', {}),
-                            'details': details,
-                            'photo_url': None
-                        }
-                        place['type'] = _normalize_type_for_display(place['google_types'])
-                        place['photo_url'] = _build_photo_url(place)
-                        if place['latitude'] is not None and place['longitude'] is not None:
-                            place['distance'] = geodesic((lat, lng), (place['latitude'], place['longitude'])).meters
-                        else:
-                            place['distance'] = None
-                        opening_hours = place['opening_hours_raw'] or {}
-                        place['opening_hours'] = opening_hours.get('weekday_text', []) if isinstance(opening_hours, dict) else []
-                        place['is_open_now'] = opening_hours.get('open_now') if isinstance(opening_hours, dict) else None
-                        if place['type'] in {"hotel", "restaurant", "tourist_attraction"}:
-                            all_pois.append(place)
-                if not all_pois:
-                    st.error("Aucun lieu trouvé. Essayez d'élargir le rayon.")
-                    st.stop()
-                pois_df = pd.DataFrame(all_pois)
-                st.session_state['pois'] = pois_df
-                recommendations = generate_recommendations(
-                    pois_df,
-                    min_rating=min_rating,
-                    stay_duration=stay_duration,
-                    time_preferences=time_preferences,
-                    weather=st.session_state['current_weather']
-                )
-                st.session_state['recommendations'] = recommendations
+                    lat_lng = (g_loc['lat'], g_loc['lng'])
+                if lat_lng:
+                    st.session_state['start_location'] = lat_lng
+                    st.success(f"Position détectée: {lat_lng[0]:.5f}, {lat_lng[1]:.5f}")
+                    weather = get_weather_forecast(lat_lng[0], lat_lng[1])
+                    if weather:
+                        st.session_state['current_weather'] = {datetime.today().strftime("%Y-%m-%d"): weather}
+                else:
+                    st.error("Impossible de détecter votre position.")
             except Exception as e:
-                st.error(f"Erreur lors de la recherche: {e}")
+                st.error(f"Erreur de détection: {e}")
 
-    # Affichage des résultats
-    if 'recommendations' in st.session_state and 'current_weather' in st.session_state:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            # Affichage de la météo du premier jour
-            first_day_date = start_date.strftime("%Y-%m-%d")
-            first_day_weather = st.session_state['current_weather'].get(first_day_date, None)
-            if first_day_weather:
-                advice = "Temps idéal pour les activités extérieures"
-                desc = first_day_weather.get('description', '').lower()
-                if any(k in desc for k in ["pluie", "orage", "bruine", "neige"]):
-                    advice = "Prévoyez un parapluie et privilégiez les activités en intérieur"
-                elif any(k in desc for k in ["vent", "rafale"]):
-                    advice = "Évitez les hauteurs exposées et les activités nautiques"
-                st.markdown(f"""
-                ### 🌦️ Météo pour {city.upper()}
-                **Jour 1**:
-                - Température: {first_day_weather.get('temp','-')}°C
-                - Conditions: {first_day_weather.get('description','-')}
-                - Conseil: {advice}
-                """)
+        # Fonction pour générer un PDF
+        def generate_pdf(recommendations, weather_forecasts, start_date, stay_duration, city):
+            pdf = FPDF()
+            try:
+                pdf.add_font('DejaVu', '', 'DejaVuSansCondensed.ttf', uni=True)
+                pdf.set_font('DejaVu', '', 12)
+            except:
+                pdf.set_font("Arial", size=12)
+            pdf.add_page()
 
-            st.header("🏆 Itinéraire Optimisé")
-            m = folium.Map(location=st.session_state['start_location'], zoom_start=14)
-            folium.Marker(
-                location=st.session_state['start_location'],
-                popup='Votre position',
-                icon=folium.Icon(color='red', icon='home')
-            ).add_to(m)
-            legend_html = """
-            <div style="position: fixed; bottom: 50px; left: 50px; width: 180px; height: 140px; border:2px solid grey; z-index:9999; font-size:14px; background-color:white; padding:8px;">
-            <b>Légende:</b><br>
-            <i class="fa fa-map-marker" style="color:blue"></i> Jour 1<br>
-            <i class="fa fa-map-marker" style="color:green"></i> Jour 2<br>
-            <i class="fa fa-map-marker" style="color:purple"></i> Jour 3<br>
-            <i class="fa fa-road" style="color:orange"></i> Trajet
-            </div>
-            """
-            m.get_root().html.add_child(folium.Element(legend_html))
-            day_summaries = []
-            previous_location = st.session_state['start_location']
-            colors = ['blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 'beige']
-            for day_num, (day, day_pois) in enumerate(st.session_state['recommendations'].items(), 1):
-                color = colors[day_num % len(colors)]
-                day_summary = {"day": day_num, "activities": [], "hotel": None}
-                seen_places = set()
-                for poi in day_pois:
-                    if poi['place_id'] in seen_places:
-                        continue
-                    seen_places.add(poi['place_id'])
-                    icon_type = {
-                        'hotel': 'bed',
-                        'restaurant': 'utensils',
-                        'tourist_attraction': 'star'
-                    }.get(poi.get('type'), 'info-sign')
-                    folium.Marker(
-                        location=[poi['latitude'], poi['longitude']],
-                        popup=f"""
-                        <div style="width: 220px;">
-                            <b>{poi['name']}</b><br>
-                            Type: {poi.get('type','-')}<br>
-                            Note: {poi.get('rating','-')}/5⭐<br>
-                            Adresse: {poi.get('address', 'Non renseignée')}<br>
-                            Niveau de prix: {get_price_level_description(poi.get('price_level', 0))}<br>
-                            {f"<img src='{poi['photo_url']}' width='100%'><br>" if poi.get('photo_url') else ""}
-                            {f"<a href='{poi['website']}' target='_blank'>Site web</a><br>" if poi.get('website') else ''}
-                        </div>
-                        """,
-                        icon=folium.Icon(color=color, icon=icon_type, prefix='fa')
-                    ).add_to(m)
-                    if previous_location and poi.get('latitude') and poi.get('longitude'):
-                        folium.PolyLine(
-                            locations=[previous_location, [poi['latitude'], poi['longitude']]],
-                            color=color,
-                            weight=2,
-                            opacity=0.7
-                        ).add_to(m)
-                        previous_location = [poi['latitude'], poi['longitude']]
-                    if poi.get('type') == 'hotel':
-                        day_summary["hotel"] = poi
-                    else:
-                        day_summary["activities"].append(poi)
-                day_summaries.append(day_summary)
-            folium_static(m, width=700, height=500)
-        with col2:
-            st.markdown("### Légende des Jours")
             for day_num in range(1, stay_duration + 1):
-                color = colors[day_num % len(colors)]
-                st.markdown(f"- Jour {day_num}: <span style='color:{color}'>■</span>", unsafe_allow_html=True)
-        st.header("📝 Résumé de votre voyage")
-        for summary in day_summaries:
-            date = start_date + timedelta(days=summary['day'] - 1)
-            date_str = date.strftime('%Y-%m-%d')
-            weather_info = st.session_state['current_weather'].get(date_str, {})
-            weather_description = weather_info.get('description', 'Non disponible')
-            temperature = weather_info.get('temp', '-')
+                day_key = f"Day {day_num}"
+                day_date = (start_date + timedelta(days=day_num - 1)).strftime("%Y-%m-%d")
+                day_pois = recommendations.get(day_key, [])
+                weather_info = weather_forecasts.get(day_date, {})
+                weather_description = weather_info.get('description', 'Non disponible')
+                temp = weather_info.get('temp', '-')
 
-            advice = "Temps idéal pour les activités extérieures"
-            if any(k in weather_description.lower() for k in ["pluie", "orage", "bruine", "neige"]):
-                advice = "Prévoyez un parapluie et privilégiez les activités en intérieur"
-            elif any(k in weather_description.lower() for k in ["vent", "rafale"]):
-                advice = "Évitez les hauteurs exposées et les activités nautiques"
+                clean_day_text = f"Jour {day_num} ({day_date}): Météo prévue - Température: {temp}°C, Conditions: {weather_description}".encode('latin1', 'ignore').decode('latin1')
+                pdf.cell(200, 10, txt=clean_day_text, ln=True, align='C')
 
-            with st.expander(f"📅 Jour {summary['day']} ({date_str}): 🌦️ Météo prévue - Température: {temperature}°C, Conditions: {weather_description}, Conseil: {advice}"):
-                if summary['hotel']:
-                    hotel = summary['hotel']
-                    rating_stars = "⭐" * int(hotel.get('rating', 0))
+                pdf.cell(200, 10, txt="Hôtel:", ln=True)
+                hotels = [poi for poi in day_pois if poi.get('type') == 'hotel']
+                for hotel in hotels:
+                    clean_text = f"Nom: {hotel['name']}, Note: {hotel.get('rating','N/A')}⭐".encode('latin1', 'ignore').decode('latin1')
+                    pdf.cell(200, 10, txt=clean_text, ln=True)
+
+                pdf.cell(200, 10, txt="Activités:", ln=True)
+                for poi in day_pois:
+                    if poi.get('type') != 'hotel':
+                        activity_text = f"Activité: {poi['name']} ({poi.get('type', '')})"
+                        clean_activity_text = activity_text.encode('latin1', 'ignore').decode('latin1')
+                        pdf.cell(200, 10, txt=clean_activity_text, ln=True)
+                        if 'time_slot' in poi:
+                            clean_time_slot = str(poi['time_slot']).encode('latin1', 'ignore').decode('latin1')
+                            pdf.cell(200, 10, txt=f"Créneau: {clean_time_slot}", ln=True)
+            byte_array_output = pdf.output(dest='S')
+            if isinstance(byte_array_output, bytearray):
+                byte_array_output = bytes(byte_array_output)
+            return byte_array_output
+
+        # Recherche
+        if st.button("🔍 Rechercher"):
+            with st.spinner("Recherche des meilleurs lieux..."):
+                try:
+                    location = get_geocode_address(f"{city}, {country}")
+                    if not location:
+                        st.error(f"Impossible de trouver {city}. Essayez une autre ville.")
+                        st.stop()
+                    lat, lng = location['lat'], location['lng']
+                    st.session_state['start_location'] = (lat, lng)
+                    st.session_state['city'] = city
+                    st.write(f"Coordonnées pour {city}: {lat}, {lng}")
+
+                    # Récupérer la météo pour chaque jour du séjour
+                    weather_forecasts = fetch_weather_forecast(lat, lng, stay_duration)
+                    if weather_forecasts:
+                        st.session_state['current_weather'] = weather_forecasts
+
+                    all_pois = []
+                    for poi_type in poi_types:
+                        g_type = 'lodging' if poi_type == 'hotel' else poi_type
+                        pois = get_nearby_places((lat, lng), radius, g_type)
+                        for poi in pois:
+                            details = get_place_details(poi.get('place_id'))
+                            place = {
+                                'name': poi.get('name') or details.get('name'),
+                                'place_id': poi.get('place_id'),
+                                'google_types': details.get('types') or poi.get('types', []),
+                                'address': details.get('vicinity') or details.get('formatted_address') or poi.get('vicinity'),
+                                'latitude': details.get('geometry', {}).get('location', {}).get('lat') or poi.get('geometry', {}).get('location', {}).get('lat'),
+                                'longitude': details.get('geometry', {}).get('location', {}).get('lng') or poi.get('geometry', {}).get('location', {}).get('lng'),
+                                'rating': details.get('rating', poi.get('rating', 0)),
+                                'user_ratings_total': details.get('user_ratings_total', poi.get('user_ratings_total', 0)),
+                                'price_level': details.get('price_level', poi.get('price_level', 0)),
+                                'reviews': details.get('reviews', []),
+                                'website': details.get('website'),
+                                'formatted_phone_number': details.get('formatted_phone_number', details.get('international_phone_number')),
+                                'opening_hours_raw': details.get('opening_hours', {}),
+                                'details': details,
+                                'photo_url': None
+                            }
+                            place['type'] = _normalize_type_for_display(place['google_types'])
+                            place['photo_url'] = _build_photo_url(place)
+                            if place['latitude'] is not None and place['longitude'] is not None:
+                                place['distance'] = geodesic((lat, lng), (place['latitude'], place['longitude'])).meters
+                            else:
+                                place['distance'] = None
+                            opening_hours = place['opening_hours_raw'] or {}
+                            place['opening_hours'] = opening_hours.get('weekday_text', []) if isinstance(opening_hours, dict) else []
+                            place['is_open_now'] = opening_hours.get('open_now') if isinstance(opening_hours, dict) else None
+                            if place['type'] in {"hotel", "restaurant", "tourist_attraction"}:
+                                all_pois.append(place)
+                    if not all_pois:
+                        st.error("Aucun lieu trouvé. Essayez d'élargir le rayon.")
+                        st.stop()
+                    pois_df = pd.DataFrame(all_pois)
+                    st.session_state['pois'] = pois_df
+                    recommendations = generate_recommendations(
+                        pois_df,
+                        min_rating=min_rating,
+                        stay_duration=stay_duration,
+                        time_preferences=time_preferences,
+                        weather=st.session_state['current_weather']
+                    )
+                    st.session_state['recommendations'] = recommendations
+                except Exception as e:
+                    st.error(f"Erreur lors de la recherche: {e}")
+
+        # Affichage des résultats
+        if 'recommendations' in st.session_state and 'current_weather' in st.session_state:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                # Affichage de la météo du premier jour
+                first_day_date = start_date.strftime("%Y-%m-%d")
+                first_day_weather = st.session_state['current_weather'].get(first_day_date, None)
+                if first_day_weather:
+                    advice = "Temps idéal pour les activités extérieures"
+                    desc = first_day_weather.get('description', '').lower()
+                    if any(k in desc for k in ["pluie", "orage", "bruine", "neige"]):
+                        advice = "Prévoyez un parapluie et privilégiez les activités en intérieur"
+                    elif any(k in desc for k in ["vent", "rafale"]):
+                        advice = "Évitez les hauteurs exposées et les activités nautiques"
                     st.markdown(f"""
-                    ### 🏨 Hôtel: {hotel.get('name','-')}
-                    - Note: {hotel.get('rating','N/A')}/5{rating_stars}
-                    - Niveau de prix: {get_price_level_description(hotel.get('price_level', 0))}
-                    - Téléphone: {hotel.get('formatted_phone_number', 'N/A')}
-                    - Ouvert maintenant: {'Oui' if hotel.get('is_open_now') else 'Non'}
-                    - Adresse: {hotel.get('address','-')}
-                    - {"[Site web](" + hotel['website'] + ")" if hotel.get('website') else "Site web: N/A"}
+                    ### 🌦️ Météo pour {city.upper()}
+                    **Jour 1**:
+                    - Température: {first_day_weather.get('temp','-')}°C
+                    - Conditions: {first_day_weather.get('description','-')}
+                    - Conseil: {advice}
                     """)
-                    if hotel.get('photo_url'):
-                        st.image(hotel['photo_url'], width=100)
-                st.markdown("### 🎯 Activités:")
-                for activity in summary['activities']:
-                    rating_stars = "⭐" * int(activity.get('rating', 0))
-                    st.markdown(f"""
-                    - **{activity.get('name','-')}** ({activity.get('type','-')})
-                      - Note: {activity.get('rating','-')}/5{rating_stars}
-                      - Adresse: {activity.get('address','-')}
-                      - Horaire: {activity.get('time_slot', 'Toute la journée')}
-                      - Niveau de prix: {get_price_level_description(activity.get('price_level', 0))}
-                      - {"[Site web](" + activity['website'] + ")" if activity.get('website') else "Site web: N/A"}
-                    """)
-                    if activity.get('photo_url'):
-                        st.image(activity['photo_url'], width=100)
-        st.download_button(
-            label="Télécharger l'itinéraire (PDF)",
-            data=generate_pdf(st.session_state['recommendations'], st.session_state['current_weather'], start_date, stay_duration),
-            file_name=f"itinerary_{city}.pdf",
-            mime="application/pdf"
-        )
 
-if 'recommendations' in st.session_state:
-    st.header("📋 Voulez-vous nous aider à améliorer ?")
-    st.markdown("""
-    Nous apprécions vos retours pour améliorer notre application.
-    Veuillez remplir ce [formulaire Google Form](https://forms.gle/R7Z2QrwRig9uuSrk8) pour nous faire part de vos suggestions et de votre expérience.
-    """)
+                st.header("🏆 Itinéraire Optimisé")
+                m = folium.Map(location=st.session_state['start_location'], zoom_start=14)
+                folium.Marker(
+                    location=st.session_state['start_location'],
+                    popup='Votre position',
+                    icon=folium.Icon(color='red', icon='home')
+                ).add_to(m)
+                legend_html = """
+                <div style="position: fixed; bottom: 50px; left: 50px; width: 180px; height: 140px; border:2px solid grey; z-index:9999; font-size:14px; background-color:white; padding:8px;">
+                <b>Légende:</b><br>
+                <i class="fa fa-map-marker" style="color:blue"></i> Jour 1<br>
+                <i class="fa fa-map-marker" style="color:green"></i> Jour 2<br>
+                <i class="fa fa-map-marker" style="color:purple"></i> Jour 3<br>
+                <i class="fa fa-road" style="color:orange"></i> Trajet
+                </div>
+                """
+                m.get_root().html.add_child(folium.Element(legend_html))
+                day_summaries = []
+                previous_location = st.session_state['start_location']
+                colors = ['blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 'beige']
+                for day_num, (day, day_pois) in enumerate(st.session_state['recommendations'].items(), 1):
+                    color = colors[day_num % len(colors)]
+                    day_summary = {"day": day_num, "activities": [], "hotel": None}
+                    seen_places = set()
+                    for poi in day_pois:
+                        if poi['place_id'] in seen_places:
+                            continue
+                        seen_places.add(poi['place_id'])
+                        icon_type = {
+                            'hotel': 'bed',
+                            'restaurant': 'utensils',
+                            'tourist_attraction': 'star'
+                        }.get(poi.get('type'), 'info-sign')
+                        folium.Marker(
+                            location=[poi['latitude'], poi['longitude']],
+                            popup=f"""
+                            <div style="width: 220px;">
+                                <b>{poi['name']}</b><br>
+                                Type: {poi.get('type','-')}<br>
+                                Note: {poi.get('rating','-')}/5⭐<br>
+                                Adresse: {poi.get('address', 'Non renseignée')}<br>
+                                Niveau de prix: {get_price_level_description(poi.get('price_level', 0))}<br>
+                                {f"<img src='{poi['photo_url']}' width='100%'><br>" if poi.get('photo_url') else ""}
+                                {f"<a href='{poi['website']}' target='_blank'>Site web</a><br>" if poi.get('website') else ''}
+                            </div>
+                            """,
+                            icon=folium.Icon(color=color, icon=icon_type, prefix='fa')
+                        ).add_to(m)
+                        if previous_location and poi.get('latitude') and poi.get('longitude'):
+                            folium.PolyLine(
+                                locations=[previous_location, [poi['latitude'], poi['longitude']]],
+                                color=color,
+                                weight=2,
+                                opacity=0.7
+                            ).add_to(m)
+                            previous_location = [poi['latitude'], poi['longitude']]
+                        if poi.get('type') == 'hotel':
+                            day_summary["hotel"] = poi
+                        else:
+                            day_summary["activities"].append(poi)
+                    day_summaries.append(day_summary)
+                folium_static(m, width=700, height=500)
+
+            with col2:
+                st.markdown("### Légende des Jours")
+                for day_num in range(1, stay_duration + 1):
+                    color = colors[day_num % len(colors)]
+                    st.markdown(f"- Jour {day_num}: <span style='color:{color}'>■</span>", unsafe_allow_html=True)
+
+            st.header("📝 Résumé de votre voyage")
+            for summary in day_summaries:
+                date = start_date + timedelta(days=summary['day'] - 1)
+                date_str = date.strftime('%Y-%m-%d')
+                weather_info = st.session_state['current_weather'].get(date_str, {})
+                weather_description = weather_info.get('description', 'Non disponible')
+                temperature = weather_info.get('temp', '-')
+                advice = "Temps idéal pour les activités extérieures"
+                if any(k in weather_description.lower() for k in ["pluie", "orage", "bruine", "neige"]):
+                    advice = "Prévoyez un parapluie et privilégiez les activités en intérieur"
+                elif any(k in weather_description.lower() for k in ["vent", "rafale"]):
+                    advice = "Évitez les hauteurs exposées et les activités nautiques"
+
+                with st.expander(f"📅 Jour {summary['day']} ({date_str}): 🌦️ Météo prévue - Température: {temperature}°C, Conditions: {weather_description}, Conseil: {advice}"):
+                    if summary['hotel']:
+                        hotel = summary['hotel']
+                        rating_stars = "⭐" * int(hotel.get('rating', 0))
+                        st.markdown(f"""
+                        ### 🏨 Hôtel: {hotel.get('name','-')}
+                        - Note: {hotel.get('rating','N/A')}/5{rating_stars}
+                        - Niveau de prix: {get_price_level_description(hotel.get('price_level', 0))}
+                        - Téléphone: {hotel.get('formatted_phone_number', 'N/A')}
+                        - Ouvert maintenant: {'Oui' if hotel.get('is_open_now') else 'Non'}
+                        - Adresse: {hotel.get('address','-')}
+                        - {"[Site web](" + hotel['website'] + ")" if hotel.get('website') else "Site web: N/A"}
+                        """)
+                        if hotel.get('photo_url'):
+                            st.image(hotel['photo_url'], width=100)
+
+                    st.markdown("### 🎯 Activités:")
+                    for activity in summary['activities']:
+                        rating_stars = "⭐" * int(activity.get('rating', 0))
+                        st.markdown(f"""
+                        - **{activity.get('name','-')}** ({activity.get('type','-')})
+                          - Note: {activity.get('rating','-')}/5{rating_stars}
+                          - Adresse: {activity.get('address','-')}
+                          - Horaire: {activity.get('time_slot', 'Toute la journée')}
+                          - Niveau de prix: {get_price_level_description(activity.get('price_level', 0))}
+                          - {"[Site web](" + activity['website'] + ")" if activity.get('website') else "Site web: N/A"}
+                        """)
+                        if activity.get('photo_url'):
+                            st.image(activity['photo_url'], width=100)
+
+            st.download_button(
+                label="Télécharger l'itinéraire (PDF)",
+                data=generate_pdf(st.session_state['recommendations'], st.session_state['current_weather'], start_date, stay_duration, city),
+                file_name=f"itinerary_{city}.pdf",
+                mime="application/pdf"
+            )
+
+    elif page == "⚙️ Confidentialité":
+        privacy_settings_page()
+        st.markdown("---")
+    elif page == "ℹ️ À propos":
+        about_page()
+    elif page == "❓ Comment ça marche":
+        how_it_works_page()
+    elif page == "⭐ Favoris":
+        favorites_page()
+
+    if 'recommendations' in st.session_state:
+        st.markdown("---")
+        st.markdown("""
+        **📋 Voulez-vous nous aider à améliorer ?**
+        Nous apprécions vos retours pour améliorer notre application.
+        Veuillez remplir ce [formulaire Google Form](https://forms.gle/R7Z2QrwRig9uuSrk8) pour nous faire part de vos suggestions et de votre expérience.
+        """)
