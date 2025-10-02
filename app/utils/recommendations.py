@@ -1,11 +1,8 @@
 import pandas as pd
-from datetime import time
-from geopy.distance import geodesic
-from .google_api import get_geocode_address, get_nearby_places
-import pandas as pd
+from datetime import datetime, timedelta
 from geopy.distance import geodesic
 
-def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferences=None, weather=None, user_age=None):
+def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferences=None, weather=None, user_age=None, events=None):
     """
     Génère des recommandations optimisées avec:
     - 1 hôtel par jour
