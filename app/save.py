@@ -1805,7 +1805,6 @@ if show_gdpr_popup():
 
 #############################Last vcersion with event :: 
 
-
 import os
 import streamlit as st
 import requests

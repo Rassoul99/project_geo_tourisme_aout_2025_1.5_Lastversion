@@ -1,5 +1,3 @@
-#############################Last vcersion with event :: 
-
 import os
 import streamlit as st
 import requests
@@ -16,12 +14,14 @@ from fpdf import FPDF
 import json
 import base64
 from pathlib import Path
+from utils.chatbot import generate_recommendations_with_chatbot
 
 # Charger les variables d'environnement
 load_dotenv()
 GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
 VIATOR_API_KEY = os.getenv("VIATOR_API_KEY")
 OPENWEATHERMAP_KEY = os.getenv("OPENWEATHERMAP_KEY")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
 # --- Fichier pour sauvegarder les préférences ---
 PREF_FILE = "user_preferences.json"
@@ -198,6 +198,24 @@ def favorites_page():
             save_favorites(favorites)
             st.success("Itinéraire ajouté aux favoris !")
 
+def chatbot_page():
+    st.title("🤖 Chatbot de Recommandations")
+    st.markdown("""
+    **Instructions :**
+    - Écrivez votre propre prompt pour interagir avec le chatbot.
+    - Incluez des détails sur votre voyage, comme la date de début, la ville, et vos préférences.
+    - Exemple de prompt : "Je vais à Paris à partir du 15 octobre 2025. Quels sont les événements et activités recommandés pour un séjour de 3 jours ?"
+    """)
+    user_input = st.text_area("Quelles sont vos préférences pour le voyage ?", value="Je vais à Dakar à partir du 15 octobre 2025. Quels sont les événements et activités recommandés pour un séjour de 3 jours ?")
+    if st.button("Obtenir des Recommandations"):
+        with st.spinner("Génération des recommandations..."):
+            try:
+                recommendations = generate_recommendations_with_chatbot(user_input)
+                st.write("Recommandations:", recommendations["recommendations"])
+                st.write("Événements:", recommendations["events"])
+            except Exception as e:
+                st.error(f"Erreur lors de la génération des recommandations: {e}")
+
 # ---------- Utilitaires locaux ----------
 def _normalize_type_for_display(google_types):
     if not google_types:
@@ -301,8 +319,7 @@ if show_gdpr_popup():
     )
     # Sidebar navigation
     st.sidebar.title("Menu")
-    page = st.sidebar.radio("Navigation", ["🏠 Accueil", "⚙️ Confidentialité", "ℹ️ À propos", "❓ Comment ça marche", "⭐ Favoris"])
-
+    page = st.sidebar.radio("Navigation", ["🏠 Accueil", "🤖 Chatbot", "⚙️ Confidentialité", "ℹ️ À propos", "❓ Comment ça marche", "⭐ Favoris"])
     # CSS pour améliorer l'interface
     st.markdown("""
     <style>
@@ -324,11 +341,9 @@ if show_gdpr_popup():
         }
     </style>
     """, unsafe_allow_html=True)
-
     if page == "🏠 Accueil":
         st.title("🌍 Smart Travel Planner")
         st.markdown("Planifiez votre voyage idéal avec des recommandations personnalisées basées sur vos préférences.")
-
         # Détection de position par défaut
         if 'start_location' not in st.session_state:
             try:
@@ -351,7 +366,6 @@ if show_gdpr_popup():
                     st.error("Impossible de détecter votre position par défaut.")
             except Exception as e:
                 st.error(f"Erreur de détection automatique: {e}")
-
         with st.sidebar:
             st.header("⚙️ Filtres")
             country = st.text_input("🌎 Pays", "France")
@@ -359,7 +373,6 @@ if show_gdpr_popup():
             start_date = st.date_input("📅 Date de début", datetime.today())
             stay_duration = st.number_input("📅 Durée du séjour (jours)", min_value=1, value=3, key="stay_duration")
             age = st.number_input("👤 Âge", min_value=0, max_value=120, value=25, key="age")
-
             # Personnalisation
             st.subheader("🍽️ Types de cuisine préférés")
             cuisine_types = st.multiselect(
@@ -367,28 +380,24 @@ if show_gdpr_popup():
                 ["Française", "Italienne", "Chinoise", "Japonaise", "Indienne", "Mexicaine", "Autre"],
                 default=["Française", "Italienne"]
             )
-
             st.subheader("🎭 Activités préférées")
             activity_types = st.multiselect(
                 "Sélectionnez vos activités préférées",
                 ["Musées", "Parcs", "Shopping", "Randonnée", "Sports", "Culture"],
                 default=["Musées", "Culture"]
             )
-
             st.subheader("📍 Types de lieux")
             poi_types = st.multiselect(
                 "Sélectionnez vos types de lieux",
                 ["restaurant", "hotel", "tourist_attraction"],
                 default=["restaurant", "hotel", "tourist_attraction"]
             )
-
             st.subheader("🎟️ Catégories d'événements")
             event_categories = st.multiselect(
                 "Sélectionnez vos catégories d'événements préférées",
                 ["concerts", "sports", "festivals", "conferences", "expositions", "other"],
                 default=["concerts", "sports", "festivals", "conferences", "expositions"]
             )
-
             radius = st.slider("📏 Rayon de recherche (mètres)", 100, 5000, 2000, key="radius")
             time_preferences = st.multiselect(
                 "⏰ Préférences horaires",
@@ -397,7 +406,6 @@ if show_gdpr_popup():
             )
             min_rating = st.slider("⭐ Note minimale", 1.0, 5.0, 4.0, 0.1)
             detect_location = st.button("📍 Détecter ma position")
-
         # Détection de la position à la demande
         if detect_location:
             try:
@@ -420,7 +428,6 @@ if show_gdpr_popup():
                     st.error("Impossible de détecter votre position.")
             except Exception as e:
                 st.error(f"Erreur de détection: {e}")
-
         # Fonction pour générer un PDF
         def generate_pdf(recommendations, weather_forecasts, start_date, stay_duration, city):
             pdf = FPDF()
@@ -466,7 +473,6 @@ if show_gdpr_popup():
             if isinstance(byte_array_output, bytearray):
                 byte_array_output = bytes(byte_array_output)
             return byte_array_output
-
         # Fonction pour récupérer les événements
         def fetch_events(category=None, country="FR", city=None, limit=5):
             ACCESS_TOKEN = "yCdaGN2Hw12zeYW0DfalpiUmYlmoFYySpKjNe-iS"
@@ -507,7 +513,6 @@ if show_gdpr_popup():
             else:
                 print(r.text)
                 return None
-
         # Recherche
         if st.button("🔍 Rechercher"):
             with st.spinner("Recherche des meilleurs lieux..."):
@@ -520,12 +525,10 @@ if show_gdpr_popup():
                     st.session_state['start_location'] = (lat, lng)
                     st.session_state['city'] = city
                     st.write(f"Coordonnées pour {city}: {lat}, {lng}")
-
                     # Récupérer la météo pour chaque jour du séjour
                     weather_forecasts = fetch_weather_forecast(lat, lng, stay_duration)
                     if weather_forecasts:
                         st.session_state['current_weather'] = weather_forecasts
-
                     all_pois = []
                     for poi_type in poi_types:
                         g_type = 'lodging' if poi_type == 'hotel' else poi_type
@@ -561,19 +564,15 @@ if show_gdpr_popup():
                             place['is_open_now'] = opening_hours.get('open_now') if isinstance(opening_hours, dict) else None
                             if place['type'] in {"hotel", "restaurant", "tourist_attraction"}:
                                 all_pois.append(place)
-
                     if not all_pois:
                         st.error("Aucun lieu trouvé. Essayez d'élargir le rayon.")
                         st.stop()
-
                     pois_df = pd.DataFrame(all_pois)
                     st.session_state['pois'] = pois_df
-
                     # Récupérer les événements
                     events = fetch_events(category=event_categories[0] if event_categories else None, country=country, city=city, limit=5)
                     if events:
                         st.session_state['events'] = events
-
                     recommendations = generate_recommendations(
                         pois_df,
                         min_rating=min_rating,
@@ -586,11 +585,9 @@ if show_gdpr_popup():
                     st.session_state['recommendations'] = recommendations
                 except Exception as e:
                     st.error(f"Erreur lors de la recherche: {e}")
-
         # Affichage des résultats
         if 'recommendations' in st.session_state and 'current_weather' in st.session_state:
-            tab1, tab2, tab3 = st.tabs(["Carte", "Résumé du voyage", "Événements"])
-
+            tab1, tab2, tab3, tab4 = st.tabs(["Carte", "Résumé du voyage", "Événements", "🤖 Chatbot"])
             with tab1:
                 st.header("🏆 Itinéraire Optimisé")
                 m = folium.Map(location=st.session_state['start_location'], zoom_start=14)
@@ -599,7 +596,6 @@ if show_gdpr_popup():
                     popup='Votre position',
                     icon=folium.Icon(color='red', icon='home')
                 ).add_to(m)
-
                 # Couleurs utilisées pour chaque jour
                 colors = ['blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 'beige']
                 legend_html = """
@@ -613,7 +609,6 @@ if show_gdpr_popup():
                 legend_html += '<i class="fa fa-home" style="color:red"></i> Votre position<br>'
                 legend_html += "</div>"
                 m.get_root().html.add_child(folium.Element(legend_html))
-
                 day_summaries = []
                 previous_location = st.session_state['start_location']
                 for day_num, (day, day_pois) in enumerate(st.session_state['recommendations'].items(), 1):
@@ -664,7 +659,6 @@ if show_gdpr_popup():
                             day_summary["activities"].append(poi)
                     day_summaries.append(day_summary)
                 folium_static(m, width=700, height=500)
-
             with tab2:
                 st.header("Résumé du voyage")
                 for summary in day_summaries:
@@ -680,7 +674,6 @@ if show_gdpr_popup():
                         advice = "Évitez les hauteurs exposées et les activités nautiques"
                     st.markdown(f"### 📅 Jour {summary['day']} ({date_str})")
                     st.markdown(f"**🌦️ Météo prévue** : Température: {temperature}°C, Conditions: {weather_description}, Conseil: {advice}")
-
                     if summary['hotel']:
                         hotel = summary['hotel']
                         rating_stars = "⭐" * int(hotel.get('rating', 0))
@@ -693,7 +686,6 @@ if show_gdpr_popup():
                         st.markdown(f"- Description: {hotel.get('description', 'Non spécifiée')}")
                         if hotel.get('photo_url'):
                             st.image(hotel['photo_url'], width=100)
-
                     st.markdown("#### 🎯 Activités:")
                     for activity in summary['activities']:
                         rating_stars = "⭐" * int(activity.get('rating', 0))
@@ -705,7 +697,6 @@ if show_gdpr_popup():
                         st.markdown(f"- Description: {activity.get('description', 'Non spécifiée')}")
                         if activity.get('photo_url'):
                             st.image(activity['photo_url'], width=100)
-
                     if summary['events']:
                         st.markdown("#### 🎟️ Événements:")
                         for event in summary['events']:
@@ -713,7 +704,6 @@ if show_gdpr_popup():
                             st.markdown(f"- Date: {event.get('start_local', 'Non spécifiée')}")
                             st.markdown(f"- Lieu: {event.get('location_name', 'Non spécifié')}")
                             st.markdown(f"- Description: {event.get('description', 'Non spécifiée')}")
-
             with tab3:
                 st.header("🎟️ Événements (pas nécessairement à proximité)")
                 if 'events' in st.session_state:
@@ -730,14 +720,16 @@ if show_gdpr_popup():
                         st.info("Aucun événement trouvé.")
                 else:
                     st.info("Aucun événement trouvé.")
-
+            with tab4:
+                chatbot_page()
             st.download_button(
                 label="Télécharger l'itinéraire (PDF)",
                 data=generate_pdf(st.session_state['recommendations'], st.session_state['current_weather'], start_date, stay_duration, city),
                 file_name=f"itinerary_{city}.pdf",
                 mime="application/pdf"
             )
-
+    elif page == "🤖 Chatbot":
+        chatbot_page()
     elif page == "⚙️ Confidentialité":
         privacy_settings_page()
         st.markdown("---")
@@ -747,7 +739,6 @@ if show_gdpr_popup():
         how_it_works_page()
     elif page == "⭐ Favoris":
         favorites_page()
-
     if 'recommendations' in st.session_state:
         st.markdown("---")
         st.markdown("""

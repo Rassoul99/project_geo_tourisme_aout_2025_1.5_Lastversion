@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime, timedelta
 from geopy.distance import geodesic
+from utils.chatbot import query_mistral_api  # Retire get_events_for_city
 
 def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferences=None, weather=None, user_age=None, events=None):
     """
@@ -11,20 +12,26 @@ def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferenc
     - Prise en compte de la météo
     - Filtrage par note minimale
     - Adaptation pour les moins de 26 ans (musées gratuits)
+    - Intégration des événements
+    - Utilisation du chatbot pour des recommandations personnalisées
     """
     if df is None or df.empty:
         return {}
+
     # FIX: robustesse sur colonnes
     for col in ['rating', 'place_id', 'type', 'name', 'latitude', 'longitude']:
         if col not in df.columns:
             df[col] = None
+
     # Filtrage par note
     df = df[pd.to_numeric(df['rating'], errors='coerce').fillna(0) >= float(min_rating)]
     df = df.drop_duplicates(subset=['place_id'])
+
     # FIX: s'assurer que 'hotel' est bien reconnu même si Google renvoie 'lodging' en amont
     hotels = df[df['type'] == 'hotel'].copy()
     restaurants = df[df['type'] == 'restaurant'].copy()
     attractions = df[df['type'] == 'tourist_attraction'].copy()
+
     # Tri simple par note puis distance (si dispo)
     def _sort_block(block):
         if block.empty:
@@ -35,24 +42,30 @@ def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferenc
             sort_cols.append('distance')
             ascending.append(True)
         return block.sort_values(by=sort_cols, ascending=ascending)
+
     hotels = _sort_block(hotels)
     restaurants = _sort_block(restaurants)
     attractions = _sort_block(attractions)
+
     recommendations = {}
     if time_preferences is None:
         time_preferences = []
+
     # Indices pour éviter de reprendre le même POI
     h_idx = 0
     r_idx = 0
     a_idx = 0
+
     for day in range(1, stay_duration + 1):
         day_key = f"Day {day}"
         recommendations[day_key] = []
+
         # Sélection 1 hôtel par jour si dispo
         if not hotels.empty and h_idx < len(hotels):
             selected_hotel = hotels.iloc[h_idx].to_dict()
             recommendations[day_key].append(selected_hotel)
             h_idx += 1
+
         # Pour chaque créneau horaire, 1 restaurant + 1 attraction
         for time_slot in time_preferences:
             # Limite à 2 restaurants par jour
@@ -61,8 +74,10 @@ def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferenc
                 selected_restaurant['time_slot'] = time_slot
                 recommendations[day_key].append(selected_restaurant)
                 r_idx += 1
+
             if not attractions.empty and a_idx < len(attractions):
                 selected_attraction = attractions.iloc[a_idx].to_dict()
+
                 # FIX: météo — si pluie/orage/bruine/neige, prioriser indoor (simple heuristique par mots-clés)
                 if weather:
                     desc = (weather.get('description') or '').lower()
@@ -77,6 +92,7 @@ def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferenc
                         else:
                             # sinon on continue normalement
                             pass
+
                 # Si l'utilisateur a moins de 26 ans, privilégier les musées
                 if user_age and user_age < 26:
                     museum_mask = attractions['name'].str.contains('musée', case=False, na=False)
@@ -85,9 +101,32 @@ def generate_recommendations(df, min_rating=4.0, stay_duration=1, time_preferenc
                         selected_attraction = museum_attractions.iloc[0].to_dict()
                         attractions = attractions.drop(museum_attractions.index[0])
                         a_idx = 0  # reset par sécurité
+
                 selected_attraction['time_slot'] = time_slot
                 recommendations[day_key].append(selected_attraction)
+
                 # Retirer l’attraction utilisée
                 attractions = attractions.drop(attractions.index[a_idx]) if a_idx < len(attractions) else attractions
                 a_idx = min(a_idx, max(len(attractions) - 1, 0))
+
+        # Ajouter les événements pour le jour
+        # if events:
+        #     for event in events.get('results', []):
+        #         event_start = pd.to_datetime(event.get('start'))
+        #         event_day = event_start.day
+        #         # Vérifier si l'événement a lieu pendant le séjour
+        #         if event_day == (datetime.now() + timedelta(days=day-1)).day:
+        #             event_info = {
+        #                 'name': event.get('title', 'Événement sans titre'),
+        #                 'type': 'event',
+        #                 'description': event.get('description', 'Non spécifiée'),
+        #                 'start_local': event.get('start_local', 'Non spécifiée'),
+        #                 'end_local': event.get('end_local', 'Non spécifiée'),
+        #                 'location': event.get('location', 'Non spécifié'),
+        #                 'category': event.get('category', 'Non spécifiée'),
+        #                 'time_slot': event_start.strftime('%H:%M'),
+        #                 'coordinates': event.get('location', 'Non spécifié')
+        #             }
+        #             recommendations[day_key].append(event_info)
+
     return recommendations
