@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-def query_mistral_api(prompt, model="mistral-tiny", temperature=0.7, max_tokens=300):
+def query_mistral_api(prompt, model="mistral-tiny", temperature=0.7, max_tokens=700):
     """
     Interroge l'API de Mistral pour obtenir une réponse à une question.
     Args:
