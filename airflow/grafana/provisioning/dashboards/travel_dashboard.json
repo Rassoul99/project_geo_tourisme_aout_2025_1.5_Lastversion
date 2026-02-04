@@ -1,0 +1,37 @@
+{
+  "title": "Travel Data Dashboard",
+  "panels": [
+    {
+      "title": "Data Sources Comparison",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sum(travel_metrics_google_places_count)",
+          "legendFormat": "Google Places"
+        },
+        {
+          "expr": "sum(travel_metrics_datatourisme_count)",
+          "legendFormat": "DATAtourisme"
+        }
+      ]
+    },
+    {
+      "title": "Average Rating",
+      "type": "singlestat",
+      "targets": [
+        {
+          "expr": "avg(travel_metrics_avg_rating)"
+        }
+      ]
+    },
+    {
+      "title": "Total Locations",
+      "type": "singlestat",
+      "targets": [
+        {
+          "expr": "sum(travel_metrics_total_locations)"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy MLflow configuration
+COPY mlflow_config.py .
+
+# Copy the entrypoint script
+COPY entrypoint.mlflow.sh .
+
+# Copy the test files
+COPY mlflow_test.py .
+COPY mlflow_dag.py .
+
+ENTRYPOINT ["sh", "entrypoint.mlflow.sh"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# FROM python:3.9-slim
+
+# WORKDIR /app
+
+# # Install system dependencies
+# RUN apt-get update && apt-get install -y \
+#     build-essential \
+#     && rm -rf /var/lib/apt/lists/*
+
+# # Install Python dependencies
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+
+# # Copy MLflow configuration
+# COPY mlflow_config.py .
+
+# # Copy your application files
+# COPY nlp_analysis.py .
+# COPY chatbot.py .
+
+# # Copy entrypoint script
+# COPY entrypoint.mlflow.sh .
+
+# ENTRYPOINT ["sh", "entrypoint.mlflow.sh"]

@@ -1,0 +1,8 @@
+FROM locustio/locust:2.20.0
+
+WORKDIR /mnt/locust
+
+COPY locust/requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY locust/locustfile.py .

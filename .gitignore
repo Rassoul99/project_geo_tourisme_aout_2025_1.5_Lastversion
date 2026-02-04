@@ -1,0 +1,22 @@
+# Airflow logs and data
+airflow/logs/
+airflow/clean_data/
+airflow/raw_files/
+airflow/models/
+
+# MLflow artifacts
+mlruns/
+
+# Fichiers de configuration locaux
+.env.local
+.env
+*.log
+*.csv
+*.sh
+
+# Fichiers système Windows/macOS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.docker.tar.gz

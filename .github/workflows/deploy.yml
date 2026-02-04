@@ -1,0 +1,43 @@
+name: Deploy Smart Travel Planner
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}  # À ajouter dans les secrets GitHub
+  GCP_REGION: europe-west1
+  SERVICE_NAME: smart-travel-planner
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r app/requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCLOUD_SERVICE_KEY }}  # Clé JSON du compte de service GCP
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/smart-travel-planner/streamlit:latest
+          env_vars: |
+            GOOGLE_PLACES_KEY=${{ secrets.GOOGLE_PLACES_KEY }}
+            OPENWEATHERMAP_KEY=${{ secrets.OPENWEATHERMAP_KEY }}
+            MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
+            DATATOURISME_API_KEY=${{ secrets.DATATOURISME_API_KEY }}

@@ -1,0 +1,14 @@
+apache-airflow
+mlflow
+scikit-learn
+prometheus-client
+pandas
+requests
+python-dotenv
+psycopg2-binary
+redis
+dash
+plotly
+joblib
+boto3
+#pip install -r requirements.txt
