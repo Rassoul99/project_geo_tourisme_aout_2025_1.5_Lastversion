@@ -125,7 +125,7 @@ OPENWEATHERMAP_KEY = os.getenv("OPENWEATHERMAP_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
 # Clé API pour DATAtourisme
-DATATOURISME_API_KEY = "d7b3b49e-58d1-4ca4-9e7c-3c0c93f79306"
+DATATOURISME_API_KEY = os.getenv("DATATOURISME_API_KEY")
 
 # --- Fichier pour sauvegarder les préférences ---
 PREF_FILE = "user_preferences.json"
