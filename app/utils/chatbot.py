@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-def query_mistral_api(prompt, model="mistral-tiny", temperature=0.7, max_tokens=700):
+def query_mistral_api(prompt, model="mistral-tiny", temperature=0.7, max_tokens=1500):
     """
     Interroge l'API de Mistral pour obtenir une réponse à une question.
     Args:
@@ -59,7 +59,7 @@ def generate_recommendations_with_chatbot(user_prompt):
         "Si aucun événement gratuit n'est disponible, propose les événements les plus intéressants qui existent. "
         "Utilise des emojis pour rendre les suggestions plus attrayantes."
     )
-    events = query_mistral_api(prompt_events, max_tokens=400)
+    events = query_mistral_api(prompt_events, max_tokens=1500)
     return {
         "recommendations": recommendations,
         "events": events
