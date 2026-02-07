@@ -1,7 +1,7 @@
-# Smart Travel Planner - Projet RNCP 37422
+# Smart Travel Planner - Projet
 
 **Auteur** : Khadim Fall
-**Date de soutenance** : 11/02/2026
+
 **Technologies** : Python, Streamlit, GCP (Cloud Run, Secret Manager), GitHub Actions, Airflow, MLflow
 
 ## 📌 Objectifs du Projet

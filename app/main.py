@@ -16,104 +16,27 @@ import base64
 from pathlib import Path
 from utils.chatbot import generate_recommendations_with_chatbot
 
-# ### GCP Imports and Backup Setup ###
-# from google.cloud import storage
-# from google.cloud import firestore
-# from google.oauth2 import service_account
-# import schedule
-# import time
-# from threading import Thread
-# from datetime import datetime 
 
-# Configuration GCP
-# credentials = service_account.Credentials.from_service_account_file(
-#     'credentials.json')
-# storage_client = storage.Client(credentials=credentials)
-# firestore_client = firestore.Client(credentials=credentials)
+import os
+import streamlit as st
+from dotenv import load_dotenv
 
-# # Sauvegarde automatique des données
-# def backup_data():
-#     bucket = storage_client.bucket(os.getenv('GCP_BUCKET_NAME'))
+# Charger .env.local uniquement en développement (pas en production)
+if os.path.exists(".env.local"):
+    load_dotenv(".env.local")
 
-#     # Sauvegarde des préférences
-#     if os.path.exists(PREF_FILE):
-#         blob = bucket.blob(f'backups/preferences_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
-#         blob.upload_from_filename(PREF_FILE)
+# Récupérer les variables d'environnement (GitHub Secrets en production)
+GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
+OPENWEATHERMAP_KEY = os.getenv("OPENWEATHERMAP_KEY")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+DATATOURISME_API_KEY = os.getenv("DATATOURISME_API_KEY")
 
-#     # Sauvegarde des favoris
-#     if os.path.exists(FAVORITES_FILE):
-#         blob = bucket.blob(f'backups/favorites_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
-#         blob.upload_from_filename(FAVORITES_FILE)
+# Vérifier que les clés sont bien chargées (pour le débogage)
+if not all([GOOGLE_PLACES_KEY, OPENWEATHERMAP_KEY, MISTRAL_API_KEY, DATATOURISME_API_KEY]):
+    st.error("⚠️ Une ou plusieurs clés API sont manquantes. Vérifiez vos variables d'environnement.")
+    st.stop()
 
-# # Planification des sauvegardes (tous les lundis à 3h)
-# def schedule_backups():
-#     schedule.every().monday.at("03:00").do(backup_data)
-
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(60)
-
-# # Démarrer le thread de sauvegarde
-# backup_thread = Thread(target=schedule_backups)
-# backup_thread.daemon = True
-# backup_thread.start()
-# ###
-
-# @st.experimental_memo
-# def backup_endpoint():
-#     backup_data()
-#     return {"status": "success", "message": "Backup completed"}
-# backup_function/main.py
-# from google.cloud import storage
-# from google.cloud import sqladmin_v1beta4
-# import os
-# import datetime
-# import tempfile
-
-# def backup_handler(request):
-#     bucket_name = os.getenv('BUCKET_NAME')
-#     project_id = os.getenv('GCP_PROJECT_ID')
-#     instance_name = "smart-travel-postgres"
-
-#     # Initialize clients
-#     storage_client = storage.Client()
-#     sql_client = sqladmin_v1beta4.SQLAdminServiceClient()
-
-#     # Create backup
-#     backup_id = f"backup-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-#     bucket = storage_client.bucket(bucket_name)
-
-#     # Create SQL backup
-#     backup_run = sql_client.backup_runs_create(
-#         project=project_id,
-#         instance=instance_name,
-#         body={
-#             "backupConfiguration": {
-#                 "binaryLogEnabled": True,
-#                 "enabled": True,
-#                 "startTime": datetime.datetime.utcnow().strftime("%H:%M"),
-#                 "location": "eu",
-#                 "pointInTimeRecoveryEnabled": True,
-#                 "transactionLogRetentionDays": 7
-#             },
-#             "description": f"Automated backup {backup_id}"
-#         }
-#     )
-
-#     # Upload application data to GCS
-#     temp_file = tempfile.NamedTemporaryFile(delete=False)
-#     with open('/app/data/user_preferences.json', 'rb') as f:
-#         temp_file.write(f.read())
-#     with open('/app/data/favorite_itineraries.json', 'rb') as f:
-#         temp_file.write(f.read())
-
-#     blob = bucket.blob(f"backups/{backup_id}/app_data.tar.gz")
-#     blob.upload_from_filename(temp_file.name)
-
-#     temp_file.close()
-#     os.unlink(temp_file.name)
-
-#     return f"Backup completed: {backup_id}", 200
+# ... (reste de votre code)
 
 
 
@@ -125,7 +48,7 @@ OPENWEATHERMAP_KEY = os.getenv("OPENWEATHERMAP_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
 # Clé API pour DATAtourisme
-DATATOURISME_API_KEY = os.getenv("DATATOURISME_API_KEY")
+# DATATOURISME_API_KEY = os.getenv("DATATOURISME_API_KEY")
 
 # --- Fichier pour sauvegarder les préférences ---
 PREF_FILE = "user_preferences.json"

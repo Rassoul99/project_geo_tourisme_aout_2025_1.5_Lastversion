@@ -1,0 +1,28 @@
+steps:
+  # Construire l'image Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPOSITORY}/streamlit:latest', './app']
+
+  # Pousser l'image vers Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPOSITORY}/streamlit:latest']
+
+  # Déployer sur Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args: ['run', 'deploy', '${_SERVICE_NAME}',
+           '--image', '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPOSITORY}/streamlit:latest',
+           '--platform', 'managed',
+           '--region', '${_GCP_REGION}',
+           '--allow-unauthenticated',
+           '--set-env-vars', 'GOOGLE_PLACES_KEY=$$GOOGLE_PLACES_KEY,OPENWEATHERMAP_KEY=$$OPENWEATHERMAP_KEY,MISTRAL_API_KEY=$$MISTRAL_API_KEY',
+           '--cpu', '2',
+           '--memory', '4Gi']
+
+substitutions:
+  _GCP_REGION: europe-west1
+  _GAR_REPOSITORY: smart-travel-planner
+  _SERVICE_NAME: streamlit-app
+
+images:
+  - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_GAR_REPOSITORY}/streamlit:latest'

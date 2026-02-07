@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - GOOGLE_PLACES_KEY=${GOOGLE_PLACES_KEY}
+      - VIATOR_API_KEY=${VIATOR_API_KEY}
+      - OPENWEATHERMAP_KEY=${OPENWEATHERMAP_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - REDIS_HOST=${REDIS_HOST}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_BUCKET_NAME=${GCP_BUCKET_NAME}
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             streamlit run main.py --server.port=8501 --server.address=0.0.0.0"
+    restart: always
+
+  locust:
+    build:
+      context: .
+      dockerfile: Dockerfile.locust
+    ports:
+      - "8089:8089"
+    command: locust -f /mnt/locust/locustfile.py --host=http://streamlit:8501
+    depends_on:
+      - streamlit
+    restart: always
+
+  grafana:
+    image: grafana/grafana:9.5.2
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+    restart: always

@@ -1,27 +1,25 @@
-# Image légère avec Python
 FROM python:3.9-slim
 
-# Installation des dépendances système
+WORKDIR /app
+
+# Installer les dépendances système
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
-    git \
+    libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation des dépendances Python
+# Copier les fichiers de requirements et les installer
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du code
-WORKDIR /app
+# Copier le reste de l'application
 COPY . .
 
-# Variables d'environnement
+# Définir les variables d'environnement
 ENV PYTHONPATH=/app
-ENV USE_CACHE=true
 
-# Port exposé
+# Exposer le port de Streamlit
 EXPOSE 8501
 
-# Commande de lancement
-CMD ["streamlit", "run", "app/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Commande pour lancer l'application
+CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
