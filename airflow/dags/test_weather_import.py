@@ -16,7 +16,7 @@ def fetch_weather_data(**kwargs):
     """
     Récupère les données météo depuis l'API OpenWeatherMap.
     """
-    api_key = "f2f631fe8f1cd293f210619d1cb976c9"  # Assurez-vous que cette clé est valide
+    api_key = os.getenv("OPENWEATHER_API_KEY")
     cities = Variable.get("cities", deserialize_json=True)
     data = []
 

@@ -34,7 +34,7 @@ def fetch_travel_data(**kwargs):
 
 def fetch_datatourisme_data(**kwargs):
     """Fetch travel data from DATAtourisme API"""
-    api_key = "d7b3b49e-58d1-4ca4-9e7c-3c0c93f79306"
+    api_key = os.getenv("DATATOURISME_API_KEY")
     cities = Variable.get("cities", deserialize_json=True, default_var=["Paris", "Lyon", "Marseille"])
     data = []
 

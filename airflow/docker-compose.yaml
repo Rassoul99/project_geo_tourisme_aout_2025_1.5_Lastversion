@@ -40,10 +40,11 @@
 #                                Default: ''
 #
 # Feel free to modify this file to suit your needs.
----
-version: "3"
+
+version: '3.8'
+
 x-airflow-common: &airflow-common
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.8.1}
+  image: apache/airflow:2.8.1
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
@@ -51,25 +52,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ""
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-    AIRFLOW__CORE__LOAD_EXAMPLES: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__API__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
-    AIRFLOW__SMTP__SMTP_HOST: "smtp.gmail.com"
-    AIRFLOW__SMTP__SMTP_PORT: 587
-    AIRFLOW__SMTP__SMTP_USER: "de.airflow@gmail.com"
-    AIRFLOW__SMTP__SMTP_PASSWORD: "cfsrvkongsobheta"
-    AIRFLOW__SMTP__SMTP_MAIL_FROM: "de.airflow@gmail.com"
-
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:- scikit-learn}
+    _PIP_ADDITIONAL_REQUIREMENTS: "mlflow scikit-learn prometheus-client pandas requests joblib"
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
-    - type: bind
-      source: ./clean_data
-      target: /app/clean_data
-    - type: bind
-      source: ./raw_files
-      target: /app/raw_files
+    - ./clean_data:/opt/airflow/clean_data
+    - ./raw_files:/opt/airflow/raw_files
+    - ./models:/opt/airflow/models
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
   depends_on:
     redis:
@@ -91,11 +83,13 @@ services:
       interval: 5s
       retries: 5
     restart: always
+    ports:
+      - "5432:5432"
 
   redis:
     image: redis:latest
     ports:
-      - 6379:6379
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -107,7 +101,7 @@ services:
     <<: *airflow-common
     command: webserver
     ports:
-      - 8080:8080
+      - "8080:8080"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 10s
@@ -151,28 +145,284 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
 
-  flower:
-    <<: *airflow-common
-    command: celery flower
+  minio:
+    image: minio/minio:latest
     ports:
-      - 5555:5555
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    restart: always
-  dashboard:
-    image: datascientest/dashapp:1.0.0
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+    command: server /data --console-address ":9001"
     volumes:
-      - type: bind
-        source: ./clean_data
-        target: /app/clean_data
-      - type: bind
-        source: ./raw_files
-        target: /app/raw_files
+      - minio-data:/data
+    restart: always
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
     ports:
-      - 8050:8050
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - ./models:/mlflow/models
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      AWS_ACCESS_KEY_ID: "minioadmin"
+      AWS_SECRET_ACCESS_KEY: "minioadmin"
+    depends_on:
+      - minio
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    restart: always
+
+  grafana:
+    image: grafana/grafana:9.5.2
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_LOG_LEVEL=debug
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    depends_on:
+      - prometheus
+    restart: always
+
+  streamlit:
+    image: python:3.9-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "8501:8501"
+    command: >
+      sh -c "pip install streamlit requests pandas folium geopy fpdf2 python-dotenv prometheus-client &&
+             streamlit run main.py --server.port=8501 --server.address=0.0.0.0"
+    environment:
+      - GOOGLE_PLACES_KEY=${GOOGLE_PLACES_KEY}
+      - VIATOR_API_KEY=${VIATOR_API_KEY}
+      - OPENWEATHERMAP_KEY=${OPENWEATHERMAP_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+    restart: always
+
+  locust:
+    build:
+      context: .
+      dockerfile: Dockerfile.locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locust:/mnt/locust
+    command: locust -f /mnt/locust/locustfile.py --host=http://streamlit:8501
+    depends_on:
+      - streamlit
+    restart: always
 
 volumes:
   postgres-db-volume:
+  minio-data:
+  grafana-storage:
+
+
+
+
+
+
+
+
+
+
+
+
+#######"Last version"
+# version: '3.8'
+
+# x-airflow-common: &airflow-common
+#   image: apache/airflow:2.8.1
+#   environment: &airflow-common-env
+#     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+#     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+#     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+#     AIRFLOW__CORE__FERNET_KEY: ""
+#     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+#     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+#     AIRFLOW__API__AUTH_BACKEND: "airflow.api.auth.backend.basic_auth"
+#     _PIP_ADDITIONAL_REQUIREMENTS: "mlflow scikit-learn prometheus-client pandas requests joblib"
+#   volumes:
+#     - ./dags:/opt/airflow/dags
+#     - ./logs:/opt/airflow/logs
+#     - ./plugins:/opt/airflow/plugins
+#     - ./clean_data:/opt/airflow/clean_data
+#     - ./raw_files:/opt/airflow/raw_files
+#     - ./models:/opt/airflow/models
+#   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
+#   depends_on:
+#     redis:
+#       condition: service_healthy
+#     postgres:
+#       condition: service_healthy
+
+# services:
+#   postgres:
+#     image: postgres:13
+#     environment:
+#       POSTGRES_USER: airflow
+#       POSTGRES_PASSWORD: airflow
+#       POSTGRES_DB: airflow
+#     volumes:
+#       - postgres-db-volume:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ["CMD", "pg_isready", "-U", "airflow"]
+#       interval: 5s
+#       retries: 5
+#     restart: always
+#     ports:
+#       - "5432:5432"
+
+#   redis:
+#     image: redis:latest
+#     ports:
+#       - "6379:6379"
+#     healthcheck:
+#       test: ["CMD", "redis-cli", "ping"]
+#       interval: 5s
+#       timeout: 30s
+#       retries: 50
+#     restart: always
+
+#   airflow-webserver:
+#     <<: *airflow-common
+#     command: webserver
+#     ports:
+#       - "8080:8080"
+#     healthcheck:
+#       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+#       interval: 10s
+#       timeout: 10s
+#       retries: 5
+#     restart: always
+
+#   airflow-scheduler:
+#     <<: *airflow-common
+#     command: scheduler
+#     healthcheck:
+#       test:
+#         [
+#           "CMD-SHELL",
+#           'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"',
+#         ]
+#       interval: 10s
+#       timeout: 10s
+#       retries: 5
+#     restart: always
+
+#   airflow-worker:
+#     <<: *airflow-common
+#     command: celery worker
+#     healthcheck:
+#       test:
+#         - "CMD-SHELL"
+#         - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+#       interval: 10s
+#       timeout: 10s
+#       retries: 5
+#     restart: always
+
+#   airflow-init:
+#     <<: *airflow-common
+#     command: version
+#     environment:
+#       <<: *airflow-common-env
+#       _AIRFLOW_DB_UPGRADE: "true"
+#       _AIRFLOW_WWW_USER_CREATE: "true"
+#       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+#       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+
+#   minio:
+#     image: minio/minio:latest
+#     ports:
+#       - "9000:9000"
+#       - "9001:9001"
+#     environment:
+#       MINIO_ROOT_USER: "minioadmin"
+#       MINIO_ROOT_PASSWORD: "minioadmin"
+#     command: server /data --console-address ":9001"
+#     volumes:
+#       - minio-data:/data
+#     restart: always
+
+#   mlflow:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.mlflow
+#     ports:
+#       - "5000:5000"
+#     volumes:
+#       - ./mlruns:/mlflow/mlruns
+#       - ./models:/mlflow/models
+#     environment:
+#       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+#       AWS_ACCESS_KEY_ID: "minioadmin"
+#       AWS_SECRET_ACCESS_KEY: "minioadmin"
+#     depends_on:
+#       - minio
+#     restart: always
+
+#   prometheus:
+#     image: prom/prometheus:latest
+#     ports:
+#       - "9090:9090"
+#     volumes:
+#       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+#     command:
+#       - "--config.file=/etc/prometheus/prometheus.yml"
+#     restart: always
+
+#   grafana:
+#     image: grafana/grafana:latest
+#     ports:
+#       - "3000:3000"
+#     volumes:
+#       - grafana-storage:/var/lib/grafana
+#       - ./grafana/provisioning:/etc/grafana/provisioning
+#     environment:
+#       - GF_SECURITY_ADMIN_PASSWORD=admin
+#     depends_on:
+#       - prometheus
+#     restart: always
+
+#   dashboard:
+#     image: datascientest/dashapp:1.0.0
+#     volumes:
+#       - type: bind
+#         source: ./clean_data
+#         target: /app/clean_data
+#       - type: bind
+#         source: ./raw_files
+#         target: /app/raw_files
+#     ports:
+#       - 8050:8050
+#     restart: always
+
+# volumes:
+#   postgres-db-volume:
+#   minio-data:
+#   grafana-storage:

@@ -22,7 +22,7 @@ def fetch_weather_data(**kwargs):
     Récupère les données météo depuis l'API OpenWeatherMap.
     Gère les erreurs de désérialisation de la variable 'cities'.
     """
-    api_key = "f2f631fe8f1cd293f210619d1cb976c9"  # Remplacez par votre clé API
+    api_key = os.getenv("OPENWEATHER_API_KEY")
     try:
         cities = Variable.get("cities", deserialize_json=True)
         if not isinstance(cities, list):
